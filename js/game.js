@@ -27,7 +27,7 @@ const KEYMAP = {
     ArrowLeft: "left", KeyA: "left", ArrowRight: "right", KeyD: "right",
     ArrowUp: "jump", KeyW: "jump", Space: "jump", ArrowDown: "down", KeyS: "down",
     KeyJ: "bonk", KeyZ: "bonk", KeyK: "pie", KeyX: "pie",
-    Enter: "start", KeyP: "pause", Escape: "pause", KeyM: "mute", KeyC: "credits",
+    Enter: "start", KeyP: "pause", Escape: "pause", KeyM: "mute", KeyC: "credits", KeyT: "tree",
 };
 const keys = new Set();
 const pressed = new Set();
@@ -66,23 +66,71 @@ for (const b of document.querySelectorAll("#touch button")) {
     for (const ev of ["pointerup", "pointerleave", "pointercancel"]) b.addEventListener(ev, () => keys.delete(a));
 }
 
-// ===== Perks: you may only ever hold ONE =====
+// ===== Perks =====
+// Base perks stack up to LV3. A LV3 perk evolves once you also hold its partner perk (any level).
+// The partners form a ring (each base is the partner of exactly one evolution), which is also
+// how the perk tree screen lays them out.
+const MAX_LV = 3;
+const BASE_ORDER = ["bigbonk", "heavy", "laugh", "society", "pie", "shoes", "whoopee"];
 const PERKS = {
-    bigbonk: { name: "BIG BONK", desc: ["MALLET RANGE +60%", "KNOCKBACK +25%"] },
-    shoes: { name: "CLOWN SHOES", desc: ["MOVE SPEED +35%", "TRIPLE JUMP"] },
-    laugh: { name: "LAUGH TRACK", desc: ["+2 MAX HA", "HEAL 2 PER WAVE"] },
-    pie: { name: "PIE-ROMANIAC", desc: ["PIE COOLDOWN", "CUT BY 2/3"] },
-    whoopee: { name: "WHOOPEE CUSHION", desc: ["BIG LANDINGS", "RELEASE A BLAST"] },
-    heavy: { name: "HEAVY BONES", desc: ["TAKE 55% LESS", "KNOCKBACK"] },
-    society: { name: "SOCIETY", desc: ["EVERY 3RD HIT", "IS A CRIT"] },
+    bigbonk: {
+        name: "BIG BONK", blurb: "BIGGER MALLET, BIGGER BONKS", evo: "wrecking",
+        lv: [["RANGE +15%", "KNOCKBACK +8%"], ["RANGE +15%", "KNOCKBACK +8%"], ["RANGE +15%", "KNOCKBACK +8%"]],
+    },
+    heavy: {
+        name: "HEAVY BONES", blurb: "HARDER TO SHOVE AROUND", evo: "ironclown",
+        lv: [["TAKE 15% LESS", "KNOCKBACK"], ["TAKE 15% LESS", "KNOCKBACK"], ["TAKE 15% LESS", "KNOCKBACK"]],
+    },
+    laugh: {
+        name: "LAUGH TRACK", blurb: "MORE HA, MORE HEALING", evo: "encore",
+        lv: [["+1 MAX HA", "(AND HEAL IT)"], ["+1 MAX HA", "(AND HEAL IT)"], ["+1 MAX HA", "HEAL 2 PER WAVE"]],
+    },
+    society: {
+        name: "SOCIETY", blurb: "REGULAR CRITICAL HITS", evo: "anarchy",
+        lv: [["EVERY 5TH HIT", "IS A CRIT"], ["EVERY 4TH HIT", "IS A CRIT"], ["EVERY 3RD HIT", "IS A CRIT"]],
+    },
+    pie: {
+        name: "PIE-ROMANIAC", blurb: "FASTER PIE COOLDOWN", evo: "piegun",
+        lv: [["PIE COOLDOWN", "-20%"], ["PIE COOLDOWN", "-20%"], ["PIE COOLDOWN", "-20% (TOTAL -60%)"]],
+    },
+    shoes: {
+        name: "CLOWN SHOES", blurb: "FASTER FEET, MORE JUMPS", evo: "jet",
+        lv: [["MOVE SPEED +10%", ""], ["MOVE SPEED +10%", "+ TRIPLE JUMP"], ["MOVE SPEED +10%", "(TOTAL +30%)"]],
+    },
+    whoopee: {
+        name: "WHOOPEE CUSHION", blurb: "LANDINGS RELEASE A BLAST", evo: "aftershock",
+        lv: [["BIG LANDINGS", "RELEASE A BLAST"], ["BIGGER BLASTS", "& GROUND POUNDS"], ["BIGGER BLASTS", "& GROUND POUNDS"]],
+    },
 };
+const EVOS = {
+    wrecking: { name: "WRECKING BALL", from: "bigbonk", needs: "heavy", blurb: "COMBO FINISHERS SEND A SHOCKWAVE", desc: ["COMBO FINISHER", "SENDS A SHOCKWAVE"] },
+    ironclown: { name: "IRON CLOWN", from: "heavy", needs: "laugh", blurb: "NO KNOCKBACK. GETTING HIT GOES CLANG", desc: ["IMMUNE TO KNOCKBACK", "HITS TAKEN CLANG"] },
+    encore: { name: "ENCORE", from: "laugh", needs: "society", blurb: "ONCE PER WAVE, CHEAT DEATH", desc: ["ONCE PER WAVE,", "CHEAT DEATH"] },
+    anarchy: { name: "ANARCHY", from: "society", needs: "pie", blurb: "EVERY 2ND HIT CRITS, AND CRITS EXPLODE", desc: ["EVERY 2ND HIT CRITS", "CRITS EXPLODE"] },
+    piegun: { name: "PIE MACHINE GUN", from: "pie", needs: "shoes", blurb: "HOLD PIE TO SPRAY. LET GO BEFORE IT OVERHEATS", desc: ["HOLD PIE TO SPRAY", "WATCH THE HEAT!"] },
+    jet: { name: "JET HONKERS", from: "shoes", needs: "whoopee", blurb: "+1 JUMP. AIR JUMPS BLAST WHAT'S BELOW", desc: ["+1 JUMP. AIR JUMPS", "BLAST BELOW YOU"] },
+    aftershock: { name: "AFTERSHOCK", from: "whoopee", needs: "bigbonk", blurb: "GROUND POUNDS SEND QUAKES ALONG THE FLOOR", desc: ["GROUND POUNDS SEND", "FLOOR QUAKES"] },
+};
+const TREE_SIZE = BASE_ORDER.length * 2;
+
+// Perk tree layout: Jonkler in the middle, base perks on the inner ring, evolutions on the outer
+// ring sitting between their base and its partner.
+const TREE_C = { x: 160, y: 98 };
+const TREE_NODES = [];
+BASE_ORDER.forEach((id, i) => {
+    const a0 = -Math.PI / 2 + (i * Math.PI * 2) / BASE_ORDER.length;
+    const a1 = a0 + Math.PI / BASE_ORDER.length;
+    TREE_NODES.push({ id, kind: "base", x: Math.round(TREE_C.x + Math.cos(a0) * 54), y: Math.round(TREE_C.y + Math.sin(a0) * 28) });
+    TREE_NODES.push({ id: PERKS[id].evo, kind: "evo", x: Math.round(TREE_C.x + Math.cos(a1) * 124), y: Math.round(TREE_C.y + Math.sin(a1) * 54) });
+});
+const TREE_BTN = { x: 4, y: 4, w: 52, h: 12 };
 
 const QUIPS = [
-    "BONK!", "HONK HONK", "WE LIVE IN A SOCIETY", "BOTTOM TEXT", "IT'S JONKLIN' TIME",
-    "GAMERS RISE UP", "YOU WOULDN'T GET IT", "SKILL ISSUE", "HA HA HA HA", "SOCIETY.",
+    "BONK!", "HONK HONK", "WE LIVE IN A SOCIETY", "WHY SO SERIOUS?", "IT'S JONKLIN' TIME",
+    "YOU WOULDN'T GET IT", "SKILL ISSUE", "HA HA HA HA", "JONKLER ALWAYS WINS",
 ];
 const DEATH_LINES = [
-    "SOCIETY WON THIS ROUND", "THE MIMES WILL NEVER SHUT UP", "SKILL ISSUE (AFFECTIONATE)",
+    "TUNG TUNG TUNG TUNG", "THE MIMES WILL NEVER SHUT UP", "SKILL ISSUE",
     "EVEN CLOWNS FALL SOMETIMES",
 ];
 
@@ -97,19 +145,33 @@ const ENEMY = {
 let state = "title";
 let paused = false;
 let stateT = 0, titleT = 0;
-let P, enemies = [], pies = [], bossWaves = [], rings = [], parts = [], floats = [];
+let P, enemies = [], pies = [], bossWaves = [], quakes = [], rings = [], parts = [], floats = [];
 let quip = null, banner = null, deathLine = "";
 let wave = 0, queue = [], spawnT = 0;
 let score = 0, chain = 0, chainT = 0, hitstop = 0, shake = 0, hitCounter = 0;
-let perk = null, perkChoices = [], perkSel = 1, newBest = false;
+let perks = {}, owned = [], evos = new Set();
+let perkChoices = [], perkSel = 1, newBest = false, treeSel = 0;
 let best = 0;
+let unlocked = new Set(); // every perk/evolution ever taken, across runs (fills in the perk tree)
 try {
     best = Number(localStorage.getItem("jonkler-best")) || 0;
+    unlocked = new Set(JSON.parse(localStorage.getItem("jonkler-unlocks") || "[]"));
 } catch {}
 
-const has = (id) => perk === id;
-const maxHp = () => 5 + (has("laugh") ? 2 : 0);
+const lv = (id) => perks[id] || 0;
+const evo = (id) => evos.has(id);
+const maxHp = () => 5 + lv("laugh");
+const pieMax = () => Math.round(90 * (1 - 0.2 * lv("pie")));
 const diff = () => Math.min(1.8, 1 + (wave - 1) * 0.05);
+
+function discover(id) {
+    if (unlocked.has(id)) return false;
+    unlocked.add(id);
+    try {
+        localStorage.setItem("jonkler-unlocks", JSON.stringify([...unlocked]));
+    } catch {}
+    return true;
+}
 
 function newGame() {
     PL = 96;
@@ -118,11 +180,12 @@ function newGame() {
         x: 160, y: PTOP, vx: 0, vy: 0, dir: 1, onGround: true, jumps: 0, hp: 5,
         atk: 0, atkId: 0, combo: 0, comboT: 0, hurt: 0, inv: 0, pieCd: 0,
         pound: false, airT: 0, t: 0, dead: false, big: false,
+        heat: 0, overheat: false, gunCd: 0, encoreUsed: false,
     };
-    enemies = []; pies = []; bossWaves = []; rings = []; parts = []; floats = [];
+    enemies = []; pies = []; bossWaves = []; quakes = []; rings = []; parts = []; floats = [];
     quip = null;
     score = 0; chain = 0; chainT = 0; hitstop = 0; shake = 0; hitCounter = 0;
-    perk = null;
+    perks = {}; owned = []; evos = new Set();
     newBest = false;
     paused = false;
     state = "play";
@@ -134,12 +197,13 @@ function goTitle() {
     PL = 96;
     PR = 224;
     state = "title";
-    enemies = []; parts = []; floats = []; bossWaves = []; rings = [];
+    enemies = []; parts = []; floats = []; bossWaves = []; quakes = []; rings = [];
     Sound.track("title");
 }
 
 function startWave(n) {
     wave = n;
+    P.encoreUsed = false;
     queue = buildQueue(n);
     spawnT = 70;
     banner = { text: n % 5 === 0 ? `BOSS WAVE ${n}` : `WAVE ${n}`, t: 100 };
@@ -248,12 +312,13 @@ function overlapPlayer(x0, y0, x1, y1) {
 function updatePlayer() {
     const p = P;
     p.t++;
-    p.big = has("bigbonk");
+    p.big = lv("bigbonk") >= 2 || evo("wrecking");
     if (p.inv > 0) p.inv--;
     if (p.pieCd > 0) p.pieCd--;
+    if (p.gunCd > 0) p.gunCd--;
     if (p.comboT > 0) p.comboT--;
-    const speed = 1.5 * (has("shoes") ? 1.35 : 1);
-    const maxJumps = has("shoes") ? 3 : 2;
+    const speed = 1.5 * (1 + 0.1 * lv("shoes"));
+    const maxJumps = 2 + (lv("shoes") >= 2 ? 1 : 0) + (evo("jet") ? 1 : 0);
 
     if (p.hurt > 0) {
         p.hurt--;
@@ -265,11 +330,13 @@ function updatePlayer() {
         if (move && !p.atk) p.dir = move;
 
         if (hit("jump") && p.jumps < maxJumps && !p.pound) {
+            const airJump = p.jumps > 0;
             p.vy = p.jumps === 0 ? -5.2 : -4.6;
             p.jumps++;
             p.onGround = false;
             Sound.play("jump", 0.4);
             dust(p.x, p.y, 4);
+            if (airJump && evo("jet")) shockwave(p.x, p.y + 10, 24, 1.8, "PFFT");
         }
         if (hit("bonk")) {
             if (!p.onGround && held("down") && !p.pound) {
@@ -284,12 +351,13 @@ function updatePlayer() {
                 Sound.play("swing", 0.4);
             }
         }
-        if (hit("pie") && p.pieCd === 0 && !p.pound) {
-            pies.push({ x: p.x + p.dir * 6, y: p.y - 13, vx: p.dir * 3.6 + p.vx * 0.3, vy: -0.6, life: 120 });
-            p.pieCd = has("pie") ? 30 : 90;
+        if (!evo("piegun") && hit("pie") && p.pieCd === 0 && !p.pound) {
+            pies.push({ x: p.x + p.dir * 6, y: p.y - 13, vx: p.dir * 3.6 + p.vx * 0.3, vy: -0.6, life: 120, pw: 2.4, lift: 1.4, stun: 20, src: "pie" });
+            p.pieCd = pieMax();
             Sound.play("move", 0.5);
         }
     }
+    if (evo("piegun")) updatePieGun(p);
 
     if (p.atk > 0) {
         attackCheck();
@@ -304,24 +372,78 @@ function updatePlayer() {
         p.jumps = 0;
         if (p.pound) {
             p.pound = false;
-            shockwave(p.x, p.y, has("whoopee") ? 46 : 34, 3.2, "BONK");
-        } else if (has("whoopee") && p.airT > 18) {
-            shockwave(p.x, p.y, 30, 2.4, "PFFT");
+            shockwave(p.x, p.y, 34 + 4 * lv("whoopee"), 3.2, "BONK");
+            if (evo("aftershock")) {
+                quakes.push({ x: p.x - 6, vx: -2.6, life: 70, hit: new Set() }, { x: p.x + 6, vx: 2.6, life: 70, hit: new Set() });
+            }
+        } else if (lv("whoopee") && p.airT > 18) {
+            shockwave(p.x, p.y, 22 + 4 * lv("whoopee"), 1.6 + 0.3 * lv("whoopee"), "PFFT");
         } else {
             dust(p.x, p.y, 3);
         }
         p.airT = 0;
     }
-    if (p.y > H + 30) gameOver("fell");
+    if (p.y > H + 30 && !encore("fell")) gameOver("fell");
+}
+
+// Pie Machine Gun: hold to spray weaker pies. Every pie adds heat; at 100% it locks up, and it
+// only cools while the button is released, so it can't be held down forever.
+function updatePieGun(p) {
+    const holding = held("pie");
+    if (p.overheat && p.t % 5 === 0) addPart(p.x + p.dir * 6, p.y - 15, (Math.random() - 0.5) * 0.4, -0.5, 30, "#8a8a9a", 1, -0.01);
+    if (holding && !p.overheat && p.hurt === 0 && !p.pound) {
+        if (p.gunCd > 0) return;
+        pies.push({
+            x: p.x + p.dir * 6, y: p.y - 13, vx: p.dir * 4.2 + p.vx * 0.3, vy: -0.3 - Math.random() * 0.6,
+            life: 90, pw: 1.3, lift: 0.8, stun: 6, src: "gun",
+        });
+        p.gunCd = 6;
+        p.heat += 0.09;
+        Sound.play("move", 0.25);
+        if (p.heat < 1) return;
+        p.heat = 1;
+        p.overheat = true;
+        floatText(p.x, p.y - 32, "OVERHEAT!", "#ff5a5a");
+        Sound.play("hurt", 0.4);
+        return;
+    }
+    if (holding) return; // must let go to cool down
+    p.heat = Math.max(0, p.heat - (p.overheat ? 0.007 : 0.02));
+    if (!p.overheat || p.heat > 0) return;
+    p.overheat = false;
+    floatText(p.x, p.y - 32, "PIE GUN READY", "#3fbf3f");
+    Sound.play("coin", 0.4);
+}
+
+// Encore evolution: once per wave, a fall or a lethal hit is forgiven.
+function encore(reason) {
+    if (!evo("encore") || P.encoreUsed) return false;
+    P.encoreUsed = true;
+    if (reason === "fell") {
+        P.x = (PL + PR) / 2;
+        P.y = -20;
+        P.vy = 0;
+        P.jumps = 1;
+        P.onGround = false;
+    }
+    P.vx = 0;
+    P.pound = false;
+    P.hp = Math.max(P.hp, 1);
+    P.inv = 150;
+    banner = { text: "ENCORE!", sub: "THE CROWD WANTS MORE", t: 80 };
+    Sound.play("wave", 0.6);
+    confetti(P.x, Math.max(20, P.y - 20), 30);
+    return true;
 }
 
 function attackCheck() {
     const p = P;
     const phase = ATK_LEN - p.atk;
     if (phase < 4 || phase > 8) return;
-    const range = 17 * (p.big ? 1.6 : 1);
+    const range = 17 * (1 + 0.15 * lv("bigbonk"));
     const x0 = p.dir > 0 ? p.x : p.x - range;
     const x1 = p.dir > 0 ? p.x + range : p.x;
+    if (phase === 6 && p.combo === 3 && evo("wrecking")) shockwave(p.x + p.dir * range * 0.7, p.y, 24, 1.8, "CRASH");
     for (const e of enemies) {
         if (e.dead || e.hitBy === p.atkId) continue;
         if (!overlapEnemy(x0, p.y - 26, x1, p.y + 2, e)) continue;
@@ -335,12 +457,6 @@ function hurtPlayer(dir, kb) {
     const p = P;
     if (p.inv > 0 || p.dead) return;
     p.hp--;
-    const k = kb * (has("heavy") ? 0.45 : 1);
-    p.vx = dir * k * 1.1;
-    p.vy = -2.2 - k * 0.3;
-    p.onGround = false;
-    p.jumps = 1;
-    p.hurt = 16;
     p.inv = 70;
     p.atk = 0;
     p.pound = false;
@@ -348,7 +464,19 @@ function hurtPlayer(dir, kb) {
     shake = Math.max(shake, 6);
     Sound.play("hurt", 0.7);
     sparks(p.x, p.y - 12, 8, "#d8283a");
-    if (p.hp <= 0) gameOver("hp");
+    if (evo("ironclown")) {
+        p.hurt = 6;
+        p.vx = 0;
+        shockwave(p.x, p.y, 30, 2.6, "CLANG");
+    } else {
+        const k = kb * (1 - 0.15 * lv("heavy"));
+        p.vx = dir * k * 1.1;
+        p.vy = -2.2 - k * 0.3;
+        p.onGround = false;
+        p.jumps = 1;
+        p.hurt = 16;
+    }
+    if (p.hp <= 0 && !encore("hp")) gameOver("hp");
 }
 
 function gameOver(reason) {
@@ -373,12 +501,19 @@ function gameOver(reason) {
 }
 
 // ===== Combat =====
-function hitEnemy(e, dir, power, lift) {
-    hitCounter++;
-    if (has("bigbonk")) power *= 1.25;
-    if (has("society") && hitCounter % 3 === 0) {
-        power *= 1.8;
-        floatText(e.x, e.y - e.h - 8, "CRIT!", "#f0c040");
+// src: "melee" | "pie" | "gun" | "wave" | "bowl". Only direct hits count toward crits, so blasts
+// triggered by crits can't chain into more crits.
+function hitEnemy(e, dir, power, lift, src = "melee") {
+    power *= 1 + 0.08 * lv("bigbonk");
+    let crit = false;
+    if (src === "melee" || src === "pie" || src === "gun") {
+        hitCounter++;
+        const every = evo("anarchy") ? 2 : lv("society") ? 6 - lv("society") : 0;
+        if (every && hitCounter % every === 0) {
+            crit = true;
+            power *= evo("anarchy") ? 1.5 : 1.8;
+            floatText(e.x, e.y - e.h - 8, "CRIT!", "#f0c040");
+        }
     }
     e.dmg += power * 7;
     const kb = (power * (1 + e.dmg / 55)) / e.weight;
@@ -393,20 +528,28 @@ function hitEnemy(e, dir, power, lift) {
         confetti(e.x, e.y - 30, 8);
     }
     if (e.type === "pigeon") e.mode = "dazed";
+    score += 10;
+    if (crit && evo("anarchy")) shockwave(e.x, e.y, 20, 1.4, "BOOM", e);
+    if (src === "gun") {
+        // rapid-fire pies would otherwise freeze the game every few frames
+        hitstop = Math.max(hitstop, 1);
+        sparks(e.x - dir * 2, e.y - e.h / 2, 3);
+        Sound.play("hit", 0.3);
+        return;
+    }
     hitstop = Math.min(8, 3 + Math.floor(kb));
     shake = Math.max(shake, Math.min(7, 1 + kb * 0.7));
     sparks(e.x - dir * 2, e.y - e.h / 2, kb > 4 ? 10 : 6);
     Sound.play(kb > 4 ? "bighit" : "hit", 0.6);
-    score += 10;
 }
 
-function shockwave(x, y, r, power, label) {
+function shockwave(x, y, r, power, label, skip = null) {
     rings.push({ x, y, r: 0, max: r, life: 14 });
     for (const e of enemies) {
-        if (e.dead) continue;
+        if (e.dead || e === skip) continue;
         const dx = e.x - x;
         if (Math.abs(dx) < r && Math.abs(e.y - y) < 20) {
-            hitEnemy(e, Math.sign(dx) || 1, power * (1 - (Math.abs(dx) / r) * 0.5), 2.5);
+            hitEnemy(e, Math.sign(dx) || 1, power * (1 - (Math.abs(dx) / r) * 0.5), 2.5, "wave");
         }
     }
     shake = Math.max(shake, 5);
@@ -423,7 +566,7 @@ function bowl(e) {
         const closeX = Math.abs(o.x - e.x) < (o.w + e.w) / 2;
         const closeY = Math.abs(o.y - o.h / 2 - (e.y - e.h / 2)) < (o.h + e.h) / 2;
         if (!closeX || !closeY) continue;
-        hitEnemy(o, Math.sign(e.vx), Math.abs(e.vx) * 0.55, 1);
+        hitEnemy(o, Math.sign(e.vx), Math.abs(e.vx) * 0.55, 1, "bowl");
         e.vx *= 0.6;
         floatText(o.x, o.y - o.h - 6, "STRIKE!", "#5ad0f0");
         score += 50;
@@ -646,8 +789,8 @@ function updatePies() {
         p.life--;
         for (const e of enemies) {
             if (e.dead || Math.abs(e.x - p.x) > e.w / 2 + 3 || p.y < e.y - e.h - 2 || p.y > e.y + 2) continue;
-            hitEnemy(e, Math.sign(p.vx), 2.4, 1.4);
-            e.stun += 20; // cream to the face
+            hitEnemy(e, Math.sign(p.vx), p.pw, p.lift, p.src);
+            e.stun += p.stun; // cream to the face
             splat(p.x, p.y);
             p.life = 0;
             break;
@@ -668,6 +811,22 @@ function updateBossWaves() {
         if (P.y > PTOP - 7 && Math.abs(P.x - w.x) < 5) hurtPlayer(Math.sign(w.vx), 3.5);
     }
     bossWaves = bossWaves.filter((w) => w.life > 0);
+}
+
+// Aftershock: player-made quakes that roll along the pillar top, hitting each grounded enemy once.
+function updateQuakes() {
+    for (const q of quakes) {
+        q.x += q.vx;
+        q.life--;
+        if (q.x < PL || q.x > PR) q.life = 0;
+        if (q.life % 3 === 0) dust(q.x, PTOP, 1);
+        for (const e of enemies) {
+            if (e.dead || q.hit.has(e) || e.y < PTOP - 6 || Math.abs(e.x - q.x) > e.w / 2 + 3) continue;
+            q.hit.add(e);
+            hitEnemy(e, Math.sign(q.vx), 2.6, 3, "wave");
+        }
+    }
+    quakes = quakes.filter((q) => q.life > 0);
 }
 
 function addPart(x, y, vx, vy, life, color, size = 1, grav = 0.1) {
@@ -746,6 +905,7 @@ function updateWorld() {
     separate();
     updatePies();
     updateBossWaves();
+    updateQuakes();
     updateParts();
     if (chainT > 0 && --chainT === 0) chain = 0;
     if (quip && --quip.life <= 0) quip = null;
@@ -754,23 +914,54 @@ function updateWorld() {
     if (shake < 0.3) shake = 0;
 }
 
+const takeRandom = (arr) => arr.splice(Math.floor(Math.random() * arr.length), 1)[0];
+
+// Offers 3 cards: base perks below LV3 and any evolution that's ready. A ready evolution is always
+// offered (in the middle slot). Once almost everything is maxed, the gaps fill with heals.
 function openPerks() {
-    const ids = Object.keys(PERKS).filter((id) => id !== perk);
+    const ready = Object.keys(EVOS).filter((id) => !evo(id) && lv(EVOS[id].from) >= MAX_LV && lv(EVOS[id].needs) >= 1);
+    const pool = BASE_ORDER.filter((id) => lv(id) < MAX_LV);
     perkChoices = [];
-    while (perkChoices.length < 3) {
-        const id = ids.splice(Math.floor(Math.random() * ids.length), 1)[0];
-        perkChoices.push(id);
-    }
+    if (ready.length) perkChoices.push(takeRandom(ready));
+    pool.push(...ready);
+    while (perkChoices.length < 3 && pool.length) perkChoices.push(takeRandom(pool));
+    while (perkChoices.length < 3) perkChoices.push("snack");
+    if (EVOS[perkChoices[0]]) [perkChoices[0], perkChoices[1]] = [perkChoices[1], perkChoices[0]];
     perkSel = 1;
     state = "perk";
 }
 
 function choosePerk(id) {
-    perk = id;
+    let fresh = false;
+    if (id === "snack") {
+        P.hp += 2;
+    } else if (EVOS[id]) {
+        evos.add(id);
+        fresh = discover(id);
+    } else {
+        if (!perks[id]) owned.push(id);
+        perks[id] = lv(id) + 1;
+        if (id === "laugh") P.hp++;
+        fresh = discover(id);
+    }
     P.hp = Math.min(P.hp, maxHp());
     Sound.play("select", 0.6);
     state = "play";
     startWave(wave + 1);
+    if (fresh) floatText(P.x, P.y - 34, "NEW IN THE PERK TREE!", "#5ad0f0");
+}
+
+function skipPerk() {
+    P.hp = Math.min(maxHp(), P.hp + 1);
+    Sound.play("select", 0.6);
+    state = "play";
+    startWave(wave + 1);
+}
+
+function openTree() {
+    state = "tree";
+    treeSel = 0;
+    Sound.play("select", 0.5);
 }
 
 function update() {
@@ -778,8 +969,18 @@ function update() {
 
     if (state === "title") {
         titleT++;
-        if (hit("start") || hit("bonk") || hit("jump")) newGame();
+        if (hit("tree")) openTree();
+        else if (hit("start") || hit("bonk") || hit("jump")) newGame();
         else if (hit("credits")) state = "credits";
+        return;
+    }
+    if (state === "tree") {
+        titleT++;
+        const step = (hit("right") ? 1 : 0) - (hit("left") ? 1 : 0);
+        if (step) treeSel = (treeSel + step + TREE_SIZE) % TREE_SIZE;
+        if (hit("jump") || hit("down")) treeSel ^= 1; // hop between a base perk and its evolution
+        if (step || hit("jump") || hit("down")) Sound.play("move", 0.4);
+        if (hit("pause") || hit("tree") || hit("start")) state = "title";
         return;
     }
     if (state === "credits") {
@@ -796,7 +997,7 @@ function update() {
             Sound.play("move", 0.4);
         }
         if (hit("bonk") || hit("start") || hit("jump")) choosePerk(perkChoices[perkSel]);
-        else if (hit("pie") && perk) choosePerk(perk);
+        else if (hit("pie")) skipPerk();
         updateParts();
         return;
     }
@@ -835,7 +1036,7 @@ function update() {
     if (!queue.length && !enemies.length) {
         state = "clear";
         stateT = 0;
-        const heal = has("laugh") ? 2 : 1;
+        const heal = lv("laugh") >= MAX_LV ? 2 : 1;
         P.hp = Math.min(maxHp(), P.hp + heal);
         Sound.play("wave", 0.6);
         banner = { text: "WAVE CLEAR!", sub: `+${heal} HA`, t: 90 };
@@ -985,6 +1186,13 @@ function drawWorld() {
         g.fillRect(Math.round(w.x) - 1, PTOP - 7, 2, 7);
         g.fillRect(Math.round(w.x) + 1, PTOP - 4, 2, 4);
     }
+    for (const q of quakes) {
+        const h = 3 + (q.life % 4 < 2 ? 2 : 0);
+        g.fillStyle = "#f0c040";
+        g.fillRect(Math.round(q.x) - 2, PTOP - h + 2, 1, h - 2);
+        g.fillRect(Math.round(q.x), PTOP - h, 1, h);
+        g.fillRect(Math.round(q.x) + 2, PTOP - h + 2, 1, h - 2);
+    }
     for (const e of enemies) {
         drawEnemy(g, e);
         const winding = (e.atk > 0 && e.atk >= e.act + e.rec) || e.act2 === "chargeWind";
@@ -1026,19 +1234,26 @@ function drawWorld() {
 function drawHUD() {
     txt("HA", 4, 4, 5, "#f4f0e8");
     for (let i = 0; i < maxHp(); i++) drawNose(16 + i * 7, 4, i < P.hp);
-    // pie cooldown bar
+    // pie cooldown bar, or the heat gauge once the pie machine gun is unlocked
     drawPie(g, 7, 15);
-    const pieMax = has("pie") ? 30 : 90;
     g.fillStyle = "#3a2a4a";
     g.fillRect(12, 13, 24, 2);
-    g.fillStyle = P.pieCd ? "#b8a8c8" : "#fff8e8";
-    g.fillRect(12, 13, Math.round(24 * (1 - P.pieCd / pieMax)), 2);
+    if (evo("piegun")) {
+        const blink = Math.floor(P.t / 6) % 2;
+        g.fillStyle = P.overheat ? (blink ? "#ff5a5a" : "#a02030") : P.heat > 0.7 ? "#e8862a" : "#f0c040";
+        g.fillRect(12, 13, Math.round(24 * P.heat), 2);
+        if (P.overheat) txt(held("pie") ? "LET GO!" : "COOLING", 39, 12, 4, "#ff8a8a");
+        else if (P.heat > 0.7) txt("HOT", 39, 12, 4, "#e8862a");
+    } else {
+        g.fillStyle = P.pieCd ? "#b8a8c8" : "#fff8e8";
+        g.fillRect(12, 13, Math.round(24 * (1 - P.pieCd / pieMax())), 2);
+    }
 
     txt(String(score), 160, 4, 8, "#ffffff", "center");
     txt(`WAVE ${wave}`, 160, 14, 4, "#b8a8c8", "center");
     if (chain > 1) txt(`COMBO x${Math.min(10, chain)}`, 160, 20, 4, "#5ad0f0", "center");
-    txt(perk ? PERKS[perk].name : "NO PERK", W - 4, 4, 4, perk ? "#f0c040" : "#6a5a80", "right");
-    if (Sound.muted) txt("MUTED", W - 4, 11, 4, "#6a5a80", "right");
+    drawPerkBar();
+    if (Sound.muted) txt("MUTED", W - 4, 23, 4, "#6a5a80", "right");
 
     const boss = enemies.find((e) => e.boss);
     if (boss) txt(`CHIEF KILLJOY  ${Math.round(boss.dmg)}%`, 160, H - 10, 5, "#ff8a8a", "center");
@@ -1049,28 +1264,138 @@ function drawHUD() {
     }
 }
 
-const cardRect = (i) => ({ x: 22 + i * 96, y: 50, w: 84, h: 78 });
+// Active perks, top-right: one slot per base perk (first taken = rightmost). A slot shows level
+// pips, and swaps to the evolution's symbol with a gold frame once evolved.
+function drawPerkBar() {
+    owned.forEach((id, i) => {
+        const x = W - 17 - i * 15;
+        const y = 3;
+        const ev = PERKS[id].evo;
+        const isEvo = evo(ev);
+        g.fillStyle = isEvo ? "#f0c040" : "#7b3fa0";
+        g.fillRect(x - 1, y - 1, 15, 15);
+        g.fillStyle = "#24143a";
+        g.fillRect(x, y, 13, 13);
+        g.save();
+        g.beginPath();
+        g.rect(x, y, 13, 13);
+        g.clip();
+        drawPerkIcon(g, isEvo ? ev : id, x + 6, y + 7, 1);
+        g.restore();
+        const spent = (ev === "encore" && isEvo && P.encoreUsed) || (ev === "piegun" && isEvo && P.overheat);
+        if (spent) {
+            g.fillStyle = "rgba(10,5,20,0.6)";
+            g.fillRect(x, y, 13, 13);
+        }
+        if (isEvo) return;
+        for (let k = 0; k < MAX_LV; k++) {
+            g.fillStyle = k < perks[id] ? "#f0c040" : "#3a2a4a";
+            g.fillRect(x + 1 + k * 4, y + 15, 3, 2);
+        }
+    });
+}
+
+function cardInfo(id) {
+    if (id === "snack") return { name: "SNACK TIME", lines: ["HEAL 2 HA", "MMM, CAKE"], tag: "", gold: false };
+    if (EVOS[id]) return { name: EVOS[id].name, lines: EVOS[id].desc, tag: "EVOLUTION!", gold: true };
+    const next = lv(id) + 1;
+    return { name: PERKS[id].name, lines: PERKS[id].lv[next - 1], tag: next === 1 ? "NEW" : `LV ${next}/${MAX_LV}`, gold: false };
+}
+
+const cardRect = (i) => ({ x: 22 + i * 96, y: 46, w: 84, h: 84 });
 
 function drawPerks() {
     dim(0.75);
-    txt("PICK YOUR ONE AND ONLY PERK", 160, 16, 7, "#f0c040", "center");
-    txt("YOU CAN ONLY HOLD ONE. IT REPLACES THE OLD ONE.", 160, 30, 4, "#d8c8f0", "center");
+    txt("PICK A PERK", 160, 14, 7, "#f0c040", "center");
+    txt("PERKS STACK TO LV3. LV3 + ITS PARTNER PERK = EVOLUTION", 160, 28, 4, "#d8c8f0", "center");
+    const blink = Math.floor(titleT++ / 10) % 2;
     perkChoices.forEach((id, i) => {
         const c = cardRect(i);
+        const info = cardInfo(id);
         const sel = i === perkSel;
         const y = c.y - (sel ? 3 : 0);
-        g.fillStyle = sel ? "#f0c040" : "#7b3fa0";
+        g.fillStyle = sel ? "#f0c040" : info.gold ? (blink ? "#e8862a" : "#f0c040") : "#7b3fa0";
         g.fillRect(c.x - 1, y - 1, c.w + 2, c.h + 2);
-        g.fillStyle = "#24143a";
+        g.fillStyle = info.gold ? "#3a1f2a" : "#24143a";
         g.fillRect(c.x, y, c.w, c.h);
-        drawPerkIcon(g, id, c.x + c.w / 2, y + 30);
-        txt(PERKS[id].name, c.x + c.w / 2, y + 6, 5, sel ? "#f0c040" : "#ffffff", "center");
-        txt(PERKS[id].desc[0], c.x + c.w / 2, y + 52, 4, "#d8c8f0", "center");
-        txt(PERKS[id].desc[1], c.x + c.w / 2, y + 60, 4, "#d8c8f0", "center");
+        drawPerkIcon(g, id, c.x + c.w / 2, y + 28);
+        txt(info.name, c.x + c.w / 2, y + 6, 5, sel ? "#f0c040" : "#ffffff", "center");
+        txt(info.tag, c.x + c.w / 2, y + 44, 4, info.gold ? "#f0c040" : "#5ad0f0", "center");
+        txt(info.lines[0], c.x + c.w / 2, y + 58, 4, "#d8c8f0", "center");
+        txt(info.lines[1], c.x + c.w / 2, y + 66, 4, "#d8c8f0", "center");
     });
-    const keep = perk ? `CURRENT: ${PERKS[perk].name}   K / PIE: KEEP IT` : "CURRENT: NOTHING. TRAGIC.";
-    txt(keep, 160, 140, 4, "#b8a8c8", "center");
-    txt(isTouch ? "TAP A CARD TO TAKE IT" : "A/D CHOOSE   J TAKE", 160, 152, 5, "#ffffff", "center");
+    txt("K / PIE: SKIP AND HEAL 1 HA", 160, 142, 4, "#b8a8c8", "center");
+    txt(isTouch ? "TAP A CARD TO TAKE IT" : "A/D CHOOSE   J TAKE", 160, 154, 5, "#ffffff", "center");
+}
+
+// Bresenham-ish pixel line on the low-res canvas.
+function pixLine(x0, y0, x1, y1, color, dotted = false) {
+    g.fillStyle = color;
+    const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) || 1;
+    for (let i = 0; i <= n; i++) {
+        if (dotted && i % 4 > 1) continue;
+        g.fillRect(Math.round(x0 + ((x1 - x0) * i) / n), Math.round(y0 + ((y1 - y0) * i) / n), 1, 1);
+    }
+}
+
+function drawTree() {
+    dim(0.82);
+    txt("PERK TREE", 160, 6, 7, "#f0c040", "center");
+    txt(`DISCOVERED ${unlocked.size}/${TREE_SIZE}`, 160, 17, 4, "#b8a8c8", "center");
+    txt(isTouch ? "< BACK" : "ESC BACK", W - 4, 6, 4, "#b8a8c8", "right");
+
+    // edges: root -> base (solid), base -> evolution (solid), partner -> evolution (dotted)
+    const dark = "#2e2040";
+    BASE_ORDER.forEach((id, i) => {
+        const b = TREE_NODES[i * 2];
+        const e = TREE_NODES[i * 2 + 1];
+        const c = TREE_NODES[((i + 1) % BASE_ORDER.length) * 2];
+        const lit = unlocked.has(e.id);
+        pixLine(TREE_C.x, TREE_C.y, b.x, b.y, unlocked.has(id) ? "#7b3fa0" : dark);
+        pixLine(c.x, c.y, e.x, e.y, lit ? "#a07a30" : dark, true);
+        pixLine(b.x, b.y, e.x, e.y, lit ? "#f0c040" : dark);
+    });
+    drawJonkler(g, { x: TREE_C.x, y: TREE_C.y + 11, dir: 1, onGround: true, vx: 0, atk: 0, t: titleT, inv: 0, hurt: 0, pound: false, combo: 1 });
+
+    const blink = Math.floor(titleT / 15) % 2;
+    TREE_NODES.forEach((n, i) => {
+        const known = unlocked.has(n.id);
+        const x = n.x - 7;
+        const y = n.y - 7;
+        let border = known ? (n.kind === "evo" ? "#f0c040" : "#7b3fa0") : "#3a2a4a";
+        if (i === treeSel && blink) border = "#ffffff";
+        g.fillStyle = border;
+        g.fillRect(x - 1, y - 1, 17, 17);
+        g.fillStyle = known ? "#24143a" : "#140c22";
+        g.fillRect(x, y, 15, 15);
+        if (!known) return txt("?", n.x + 1, n.y - 2, 5, "#4a3a60", "center", null);
+        g.save();
+        g.beginPath();
+        g.rect(x, y, 15, 15);
+        g.clip();
+        drawPerkIcon(g, n.id, n.x, n.y, 1);
+        g.restore();
+    });
+
+    // info for the selected node
+    const n = TREE_NODES[treeSel];
+    const known = unlocked.has(n.id);
+    const nameOf = (id) => (unlocked.has(id) ? PERKS[id].name : "???");
+    let name, line1, line2;
+    if (n.kind === "base") {
+        const p = PERKS[n.id];
+        name = known ? p.name : "???";
+        line1 = known ? p.blurb : "TAKE IT DURING A RUN TO DISCOVER IT";
+        line2 = `STACKS TO LV3. EVOLVES INTO ${unlocked.has(p.evo) ? EVOS[p.evo].name : "???"}`;
+    } else {
+        const ev = EVOS[n.id];
+        name = known ? ev.name : "??? EVOLUTION";
+        line1 = known ? ev.blurb : "AN UNDISCOVERED EVOLUTION";
+        line2 = `NEEDS LV3 ${nameOf(ev.from)} + ${nameOf(ev.needs)}`;
+    }
+    txt(name, 160, 161, 5, known ? (n.kind === "evo" ? "#f0c040" : "#ffffff") : "#6a5a80", "center");
+    txt(line1, 160, 168, 4, "#d8c8f0", "center");
+    txt(line2, 160, 174, 4, "#8a7aa8", "center");
 }
 
 function drawTitle() {
@@ -1087,8 +1412,16 @@ function drawTitle() {
     }
     txt("A/D MOVE  W/SPACE JUMP  J/CLICK BONK  K PIE", 160, 150, 4, "#d8c8f0", "center");
     txt("S+J IN THE AIR: GROUND POUND", 160, 158, 4, "#d8c8f0", "center");
-    txt("C CREDITS   M MUTE   P PAUSE", 160, 168, 4, "#8a7aa8", "center");
+    txt("C CREDITS   T PERK TREE   M MUTE   P PAUSE", 160, 168, 4, "#8a7aa8", "center");
     if (best) txt(`BEST ${best}`, W - 4, 4, 4, "#f0c040", "right");
+
+    const b = TREE_BTN;
+    g.fillStyle = "#7b3fa0";
+    g.fillRect(b.x - 1, b.y - 1, b.w + 2, b.h + 2);
+    g.fillStyle = "#24143a";
+    g.fillRect(b.x, b.y, b.w, b.h);
+    txt(isTouch ? "PERK TREE" : "T PERK TREE", b.x + b.w / 2, b.y + 4, 4, "#f0c040", "center");
+    txt(`${unlocked.size}/${TREE_SIZE} FOUND`, b.x + b.w / 2, b.y + b.h + 3, 4, "#8a7aa8", "center");
 }
 
 function drawCredits() {
@@ -1136,7 +1469,7 @@ function drawGameOver() {
 
 function render() {
     g.drawImage(bgCanvas, 0, 0);
-    if (state !== "title" && state !== "credits" && wave > 1) {
+    if (state !== "title" && state !== "credits" && state !== "tree" && wave > 1) {
         g.fillStyle = `rgba(160,20,40,${Math.min(0.22, (wave - 1) * 0.018)})`; // the sky gets angrier
         g.fillRect(0, 0, W, H);
     }
@@ -1144,6 +1477,8 @@ function render() {
 
     if (state === "title") {
         drawTitle();
+    } else if (state === "tree") {
+        drawTree();
     } else if (state === "credits") {
         drawCredits();
     } else {
@@ -1171,7 +1506,17 @@ screen.addEventListener("pointerdown", (ev) => {
     const rect = screen.getBoundingClientRect();
     const lx = ((ev.clientX - rect.left) / rect.width) * W;
     const ly = ((ev.clientY - rect.top) / rect.height) * H;
-    if (state === "title") return newGame();
+    if (state === "title") {
+        const b = TREE_BTN;
+        if (lx >= b.x && lx <= b.x + b.w && ly >= b.y && ly <= b.y + b.h + 8) return openTree();
+        return newGame();
+    }
+    if (state === "tree") {
+        const i = TREE_NODES.findIndex((n) => Math.abs(lx - n.x) <= 8 && Math.abs(ly - n.y) <= 8);
+        if (i >= 0) treeSel = i;
+        else if (lx > W - 50 && ly < 16) state = "title";
+        return;
+    }
     if (state === "credits") return goTitle();
     if (state === "over" && stateT > 50) return newGame();
     // mouse: left click bonks, right click throws a pie

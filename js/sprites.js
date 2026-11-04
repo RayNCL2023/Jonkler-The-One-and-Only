@@ -148,7 +148,7 @@ function drawMime(ctx, e) {
 }
 
 function drawCop(ctx, e, sc = 1) {
-    const r = pen(ctx, e.x, e.y, e.dir, sc, e.flash ? FLASH : null);
+    const r  = pen(ctx, e.x, e.y, e.dir, sc, e.flash ? FLASH : null);
     const shirt = e.boss ? "#2a3a8a" : "#3a5ac8";
     const pants = "#1e2a5a";
     const walk = e.onGround && Math.abs(e.vx) > 0.15;
@@ -224,8 +224,8 @@ function drawPie(ctx, x, y) {
     ctx.fillRect(Math.round(x), Math.round(y) - 3, 1, 1);
 }
 
-function drawPerkIcon(ctx, id, cx, cy) {
-    const r = pen(ctx, cx, cy, 1, 2);
+function drawPerkIcon(ctx, id, cx, cy, sc = 2) {
+    const r = pen(ctx, cx, cy, 1, sc);
     switch (id) {
         case "bigbonk":
             r.line(-5, 5, 2, -2, "#8a5a2a");
@@ -267,6 +267,77 @@ function drawPerkIcon(ctx, id, cx, cy) {
             r(-5, 2, 10, 2, "#1a1a1a");
             r(-3, -6, 6, 8, "#1a1a1a");
             r(-3, 0, 6, 1, "#d8283a");
+            break;
+
+        // ----- evolutions -----
+        case "wrecking": // chained iron ball with a red stripe
+            r.line(-6, -7, -1, -2, "#8a8a9a");
+            r(-6, -7, 2, 1, "#6a6a7a");
+            r(-2, -2, 8, 7, "#3a3a4a");
+            r(-1, -3, 6, 1, "#3a3a4a");
+            r(-1, 5, 6, 1, "#3a3a4a");
+            r(-2, 1, 8, 1, "#e03c3c");
+            r(0, -1, 2, 1, "#8a8aa0");
+            break;
+        case "ironclown": // iron shield with a clown nose
+            r(-5, -6, 10, 8, "#9aa4b8");
+            r(-4, 2, 8, 2, "#9aa4b8");
+            r(-2, 4, 4, 2, "#9aa4b8");
+            r(-5, -6, 10, 1, "#6a7488");
+            r(3, -5, 2, 8, "#6a7488");
+            r(-1, -2, 2, 2, "#e03c3c");
+            r(-4, -4, 1, 1, "#f4f0e8");
+            break;
+        case "encore": // spotlight star
+            r(-1, -6, 2, 12, "#f0c040");
+            r(-6, -1, 12, 2, "#f0c040");
+            r(-3, -3, 6, 6, "#f0c040");
+            r(-1, -1, 2, 2, "#fff4c0");
+            r(4, -5, 1, 1, "#ffffff");
+            r(-5, 4, 1, 1, "#ffffff");
+            break;
+        case "anarchy": // lit bomb with a grin
+            r(-4, -3, 8, 8, "#1a1a1a");
+            r(-5, -2, 10, 6, "#1a1a1a");
+            r(-3, -4, 6, 1, "#1a1a1a");
+            r(-3, -2, 1, 2, "#5a5a6a");
+            r(-2, 2, 4, 1, "#d8283a");
+            r(1, -6, 1, 2, "#8a5a2a");
+            r(2, -7, 1, 1, "#f0c040");
+            r(3, -8, 1, 1, "#e03c3c");
+            break;
+        case "piegun": // pie-loaded blaster
+            r(-6, -1, 11, 4, "#5a5a6a");
+            r(5, 0, 3, 2, "#8a8a9a");
+            r(8, 0, 1, 2, "#e8862a");
+            r(-5, 3, 3, 4, "#3a3a4a");
+            r(-4, -4, 7, 3, "#fff8e8");
+            r(-4, -1, 7, 1, "#b0b0c0");
+            r(-1, -5, 2, 1, "#d8283a");
+            break;
+        case "jet": // clown shoe with a flame trail
+            r(-2, -6, 3, 3, "#4e2266");
+            r(-4, -3, 10, 4, "#d23a3a");
+            r(3, -3, 3, 1, "#ff7a7a");
+            r(-6, 1, 3, 2, "#f0c040");
+            r(-4, 1, 4, 3, "#e8862a");
+            r(-3, 4, 2, 2, "#f0c040");
+            break;
+        case "aftershock": // mallet slamming, waves rolling out
+            r(-7, 3, 14, 2, "#a49cc0");
+            r(-7, 0, 2, 3, "#f0c040");
+            r(-5, -2, 1, 5, "#f0c040");
+            r(4, -2, 1, 5, "#f0c040");
+            r(5, 0, 2, 3, "#f0c040");
+            r(-2, -7, 4, 4, "#e03c3c");
+            r(0, -3, 1, 6, "#8a5a2a");
+            break;
+        case "snack": // slice of cake
+            r(-5, -1, 10, 5, "#f0d8a0");
+            r(-5, -3, 10, 2, "#f07ab0");
+            r(-5, 1, 10, 1, "#f07ab0");
+            r(-1, -6, 2, 3, "#f4f0e8");
+            r(-1, -7, 2, 1, "#f0c040");
             break;
     }
 }
