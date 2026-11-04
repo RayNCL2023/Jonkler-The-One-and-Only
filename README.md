@@ -29,8 +29,11 @@ flying knock over other enemies, and chaining knock-offs builds a score multipli
 It's plain HTML and JS with no build step. Serve the folder:
 
 ```bash
-bunx serve game
+# from inside the game/ folder
+bunx serve .
 ```
+
+Then open the URL it prints (usually http://localhost:3000).
 
 Opening `index.html` directly also mostly works, but some browsers block the font when loading
 from `file://`.
