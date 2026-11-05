@@ -56,7 +56,14 @@ from `file://`.
 
 ## Publishing on itch.io
 
-Zip the **contents** of `game/` (so `index.html` sits at the root of the zip), upload it as an
-HTML project, and set the viewport to 1280x720 or turn on fullscreen.
+Build the zip with the included script, which writes `jonkler-itch.zip` next to this folder:
+
+```bash
+python build-itch.py
+```
+
+Upload it as an HTML project and set the viewport to 1280x720. Don't zip with PowerShell's
+`Compress-Archive`: it stores paths with backslashes, and itch then can't find the scripts
+(black screen).
 
 See [CREDITS.md](CREDITS.md) for the assets.
