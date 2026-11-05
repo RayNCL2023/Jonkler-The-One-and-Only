@@ -1551,4 +1551,7 @@ function frame(now) {
 }
 
 Sound.track("title");
-document.fonts.load('16px "PS2P"').finally(() => requestAnimationFrame(frame));
+// Don't wait on the font: on slow connections it can queue behind the audio and leave a black screen.
+// Text uses the fallback font until it arrives.
+document.fonts.load('16px "PS2P"').catch(() => {});
+requestAnimationFrame(frame);
