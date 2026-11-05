@@ -1,8 +1,7 @@
 # Jonkler: The One and Only
 
 A pixel arena brawler for the "One and Only" jam. You are the one and only Jonkler, standing on
-the one and only pillar, holding your one and only perk. Mimes, the Fun Police, pigeons and
-eventually Chief Killjoy climb up to stop you. Bonk them off the edge before they bonk you.
+the one and only pillar. Mimes, the Fun Police, pigeons and eventually Chief Killjoy climb up to stop you. Bonk them off the edge before they bonk you.
 
 ## How the theme fits
 
